@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const base64String = reader.result.split(",")[1];
         const mimeType = imageFile.type;
 
-        const response = await fetch(GAS_URL, {
+        const response = await fetch('https://script.google.com/macros/s/AKfycbzKSSewklkPyRl3Pk6GISeW94q_VYCcmpVar9ah6abbDPLs965JkaTca5jFxMkD9qs8xQ/exec', {
           method: "POST",
           mode: "no-cors",
           headers: { "Content-Type": "application/json" },
@@ -40,7 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const fromPlace = document.getElementById("fromPlace").value;
       const toPlace = document.getElementById("toPlace").value;
 
-      const response = await fetch(GAS_URL, {
+      const response = await fetch('https://script.google.com/macros/s/AKfycbzKSSewklkPyRl3Pk6GISeW94q_VYCcmpVar9ah6abbDPLs965JkaTca5jFxMkD9qs8xQ/exec', {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
