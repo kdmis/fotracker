@@ -61,6 +61,14 @@
 
 <script>
   const scriptURL = 'https://script.google.com/macros/s/AKfycbxZrVn-AzeGSFmYf8LkAP6cAxF9MVgPEh4wCwj7Aoc3jUqRGLkR8z02xalniiucvAfntQ/exec';
+  
+  // Store location permission status in sessionStorage
+  let locationPermissionGranted = false;
+  
+  // Check if we have stored permission status in this session
+  if (sessionStorage.getItem('locationPermissionGranted') === 'true') {
+    locationPermissionGranted = true;
+  }
 
   function showMessage(msg, type = 'success') {
     const messageBox = document.getElementById('message');
@@ -68,43 +76,74 @@
     messageBox.className = type === 'success' ? 'text-green-600 mt-4' : 'text-red-600 mt-4';
   }
 
-function getLocation(callback) {
-  const permissionKey = 'locationPermission';
-
-  // Check sessionStorage first
-  if (sessionStorage.getItem(permissionKey) === 'granted') {
-    navigator.geolocation.getCurrentPosition(
-      pos => callback(pos.coords.latitude, pos.coords.longitude),
-      () => callback(null, null)
-    );
-    return;
-  }
-
-  // Ask permissions only if not stored yet
-  navigator.permissions.query({ name: 'geolocation' }).then(result => {
-    if (result.state === 'granted') {
-      sessionStorage.setItem(permissionKey, 'granted');
+  // Improved getLocation function that checks session storage first
+  function getLocation(callback) {
+    if (!navigator.geolocation) {
+      console.warn("Geolocation not supported by this browser");
+      return callback(null, null);
+    }
+    
+    // If we already have permission from this session, get location without prompting
+    if (locationPermissionGranted) {
       navigator.geolocation.getCurrentPosition(
         pos => callback(pos.coords.latitude, pos.coords.longitude),
-        () => callback(null, null)
+        error => {
+          console.error("Error getting location:", error);
+          callback(null, null);
+        }
       );
-    } else if (result.state === 'prompt') {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          sessionStorage.setItem(permissionKey, 'granted'); // user granted access
-          callback(pos.coords.latitude, pos.coords.longitude);
-        },
-        () => callback(null, null) // user denied
-      );
-    } else {
-      console.warn("Geolocation permission denied.");
-      callback(null, null);
+      return;
     }
-  }).catch(err => {
-    console.error("Permission check failed:", err);
-    callback(null, null);
-  });
-}
+    
+    // Otherwise, check permission status and request if needed
+    navigator.permissions.query({ name: 'geolocation' }).then(result => {
+      if (result.state === 'granted') {
+        // Permission already granted
+        locationPermissionGranted = true;
+        sessionStorage.setItem('locationPermissionGranted', 'true');
+        
+        navigator.geolocation.getCurrentPosition(
+          pos => callback(pos.coords.latitude, pos.coords.longitude),
+          error => {
+            console.error("Error getting location:", error);
+            callback(null, null);
+          }
+        );
+      } else if (result.state === 'prompt') {
+        // Need to request permission
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            // Permission was just granted
+            locationPermissionGranted = true;
+            sessionStorage.setItem('locationPermissionGranted', 'true');
+            callback(pos.coords.latitude, pos.coords.longitude);
+          },
+          error => {
+            console.error("Location permission denied:", error);
+            callback(null, null);
+          }
+        );
+      } else {
+        // Permission was denied previously
+        console.warn("Geolocation permission denied");
+        callback(null, null);
+      }
+      
+      // Set up a listener for permission changes
+      result.onchange = function() {
+        if (result.state === 'granted') {
+          locationPermissionGranted = true;
+          sessionStorage.setItem('locationPermissionGranted', 'true');
+        } else {
+          locationPermissionGranted = false;
+          sessionStorage.removeItem('locationPermissionGranted');
+        }
+      };
+    }).catch(err => {
+      console.error("Permission check failed:", err);
+      callback(null, null);
+    });
+  }
 
   document.addEventListener('click', function(e) {
     if (e.target.closest('.remove-expense')) {
