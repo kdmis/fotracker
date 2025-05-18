@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Check-In App</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Using Flowbite as alternative to Preline since the Preline URL was broken -->
+  <!-- CHANGE: Replaced broken Preline with Flowbite CSS/JS -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.0/flowbite.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.0/flowbite.min.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div class="max-w-md mx-auto p-4">
+    <h1 class="text-xl font-bold mb-4">Check-In / Check-Out</h1>
+
+    <div class="space-y-3">
+      <div class="flex items-center gap-2">
+        <button id="checkinBtn" class="w-1/2 bg-green-500 text-white py-2 rounded-lg shadow">Check In</button>
+        <button id="checkoutBtn" class="w-1/2 bg-red-500 text-white py-2 rounded-lg shadow">Check Out</button>
+      </div>
+      <input type="number" id="bikeReading" placeholder="Bike Reading (Optional)" class="w-full p-2 border rounded" />
+      
+      <!-- CHANGE: Added bike meter reading proof file input -->
+      <div class="mt-2">
+        <label for="bikeReadingProof" class="block text-sm font-medium text-gray-700 mb-1">Bike Meter Reading Proof</label>
+        <input type="file" id="bikeReadingProof" accept="image/*" class="w-full p-2 border rounded" />
+      </div>
+    </div>
+
+    <h2 class="text-xl font-bold mt-8 mb-4">Travel Plan</h2>
+    <div class="space-y-3">
+      <input type="date" id="travelDate" class="w-full p-2 border rounded" />
+      <input type="text" id="from" placeholder="From" class="w-full p-2 border rounded" />
+      <input type="text" id="destination" placeholder="To" class="w-full p-2 border rounded" />
+      <textarea id="notes" placeholder="Notes i.e. Kiski File Bharne Gye, Kahan School Visit ki, Ya Kahan Par Stay Kiya" class="w-full p-2 border rounded"></textarea>
+
+      <div id="expenseWrapper" class="space-y-2">
+        <!-- CHANGE: Added remove button to expense blocks -->
+        <div class="flex gap-2 items-center">
+          <input type="text" placeholder="Expense Description" class="desc w-1/2 p-2 border rounded" />
+          <input type="number" placeholder="Amount" class="amount w-1/2 p-2 border rounded" />
+          <button type="button" class="remove-expense text-red-500 hover:text-red-700">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <button id="addExpense" class="text-blue-500 underline">+ Add Expense</button>
+
+      <input type="file" id="attachment" class="w-full" accept="image/*" />
+      <button id="submitTravel" class="w-full bg-blue-600 text-white py-2 rounded-lg shadow">Submit Travel Plan</button>
+    </div>
+
+    <div id="message" class="mt-4 text-center"></div>
+  </div>
+
+<script>
+  const scriptURL = 'https://script.google.com/macros/s/AKfycbxZrVn-AzeGSFmYf8LkAP6cAxF9MVgPEh4wCwj7Aoc3jUqRGLkR8z02xalniiucvAfntQ/exec';
+
+  function showMessage(msg, type = 'success') {
+    const messageBox = document.getElementById('message');
+    messageBox.textContent = msg;
+    messageBox.className = type === 'success' ? 'text-green-600 mt-4' : 'text-red-600 mt-4';
+  }
+
+  function getLocation(callback) {
+    if (!navigator.geolocation) return callback(null, null);
+
+    // Check if location permission was already granted
+    navigator.permissions.query({ name: 'geolocation' }).then(result => {
+      if (result.state === 'granted') {
+        navigator.geolocation.getCurrentPosition(
+          pos => callback(pos.coords.latitude, pos.coords.longitude),
+          () => callback(null, null)
+        );
+      } else if (result.state === 'prompt') {
+        navigator.geolocation.getCurrentPosition(
+          pos => callback(pos.coords.latitude, pos.coords.longitude),
+          () => callback(null, null)
+        );
+      } else {
+        // If permission is denied
+        console.warn("Geolocation permission denied.");
+        callback(null, null);
+      }
+    }).catch(err => {
+      console.error("Permission check failed:", err);
+      callback(null, null);
+    });
+  }
+
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.remove-expense')) {
+      const expenseRow = e.target.closest('.flex');
+      if (document.querySelectorAll('#expenseWrapper .flex').length > 1) {
+        expenseRow.remove();
+      } else {
+        const inputs = expenseRow.querySelectorAll('input');
+        inputs.forEach(input => input.value = '');
+      }
+    }
+  });
+
+  document.getElementById('checkinBtn').addEventListener('click', async () => {
+    getLocation(async (lat, long) => {
+      const bikeReadingProofInput = document.getElementById('bikeReadingProof');
+      let bikeReadingProof = null;
+
+      if (bikeReadingProofInput.files[0]) {
+        bikeReadingProof = await toBase64(bikeReadingProofInput.files[0]);
+      }
+
+      const data = {
+        type: 'checkin',
+        action: 'checkin',
+        bikeReading: document.getElementById('bikeReading').value,
+        bikeReadingProof: bikeReadingProof ? {
+          name: bikeReadingProofInput.files[0].name,
+          mimeType: bikeReadingProofInput.files[0].type,
+          base64: bikeReadingProof
+        } : null,
+        latitude: lat,
+        longitude: long
+      };
+      sendData(data);
+    });
+  });
+
+  document.getElementById('checkoutBtn').addEventListener('click', async () => {
+    getLocation(async (lat, long) => {
+      const bikeReadingProofInput = document.getElementById('bikeReadingProof');
+      let bikeReadingProof = null;
+
+      if (bikeReadingProofInput.files[0]) {
+        bikeReadingProof = await toBase64(bikeReadingProofInput.files[0]);
+      }
+
+      const data = {
+        type: 'checkin',
+        action: 'checkout',
+        bikeReading: document.getElementById('bikeReading').value,
+        bikeReadingProof: bikeReadingProof ? {
+          name: bikeReadingProofInput.files[0].name,
+          mimeType: bikeReadingProofInput.files[0].type,
+          base64: bikeReadingProof
+        } : null,
+        latitude: lat,
+        longitude: long
+      };
+      sendData(data);
+    });
+  });
+
+  document.getElementById('addExpense').addEventListener('click', () => {
+    const wrapper = document.getElementById('expenseWrapper');
+    const div = document.createElement('div');
+    div.classList.add('flex', 'gap-2', 'items-center');
+    div.innerHTML = `
+      <input type="text" placeholder="Expense Description" class="desc w-1/2 p-2 border rounded" />
+      <input type="number" placeholder="Amount" class="amount w-1/2 p-2 border rounded" />
+      <button type="button" class="remove-expense text-red-500 hover:text-red-700">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+        </svg>
+      </button>
+    `;
+    wrapper.appendChild(div);
+  });
+
+  document.getElementById('submitTravel').addEventListener('click', async () => {
+    const expenses = [...document.querySelectorAll('#expenseWrapper .flex')].map(el => ({
+      desc: el.querySelector('.desc').value,
+      amount: el.querySelector('.amount').value
+    })).filter(exp => exp.desc && exp.amount);
+
+    const fileInput = document.getElementById('attachment');
+    const file = fileInput.files[0];
+    let attachment = null;
+
+    if (file) {
+      const base64 = await toBase64(file);
+      attachment = {
+        name: file.name,
+        mimeType: file.type,
+        base64
+      };
+    }
+
+    const data = {
+      type: 'travel',
+      date: document.getElementById('travelDate').value,
+      from: document.getElementById('from').value,
+      destination: document.getElementById('destination').value,
+      notes: document.getElementById('notes').value,
+      expenses,
+      attachments: attachment ? [attachment] : []
+    };
+
+    sendData(data);
+  });
+
+  function sendData(data) {
+    fetch(scriptURL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify(data),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    .then(response => {
+      showMessage('Submitted successfully!', 'success');
+    })
+    .catch(err => {
+      console.error(err);
+      showMessage('Something went wrong', 'error');
+    });
+  }
+
+  function toBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+    });
+  }
+</script>
+
+</body>
+</html>
